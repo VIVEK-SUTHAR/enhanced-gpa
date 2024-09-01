@@ -1,9 +1,12 @@
+mod exchange_rate;
 mod get_tokens;
 mod price_fetcher;
 mod server;
 mod state;
 mod tokens_map;
+mod currencies;
 use dotenvy::dotenv;
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
@@ -16,7 +19,7 @@ async fn main() -> std::io::Result<()> {
             panic!("{}", format!("Token loading failed :{}", e));
         }
     }
-
-    let app_state = state::AppState::new();
-    server::start_server(app_state, "127.0.0.1:8081").await
+    let app_state = state::AppState::new().await;
+    server::start_server(app_state, "127.0.0.1:8080").await?;
+    Ok(())
 }

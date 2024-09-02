@@ -147,8 +147,15 @@ async fn process_single_account(
     currency: Currency,
 ) -> Option<TokenInfo> {
     let mint_token_account = SplTokenAccount::unpack_from_slice(&account.data).ok()?;
+
+    if mint_token_account.amount == 0 {
+        return None;
+    }
+
     let mint_address = mint_token_account.mint.to_string();
+
     let token_data = tokens_map::get_token_info(&mint_address)?;
+
     let decimals = token_data.decimals.unwrap_or(0);
 
     let real_amount = mint_token_account.amount as f64 / 10f64.powi(decimals as i32);
@@ -163,6 +170,7 @@ async fn process_single_account(
 
     let converted_total_value =
         ExchangeRates::convert(exchange_rates, usd_price * real_amount, currency)?;
+
     let converted_token_price = ExchangeRates::convert(exchange_rates, usd_price, currency)?;
 
     Some(TokenInfo {

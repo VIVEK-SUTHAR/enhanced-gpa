@@ -7,7 +7,7 @@ use std::sync::Mutex;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TokenInfo {
     pub address: String,
-    pub decimals: Option<i8>,
+    pub decimals: Option<u8>,
     #[serde(rename = "logoURI")]
     pub logo_uri: Option<String>,
     pub name: Option<String>,
@@ -36,5 +36,6 @@ pub fn load_token_list() -> Result<HashMap<String, TokenInfo>, Box<dyn std::erro
 
 pub fn get_token_info(address: &str) -> Option<TokenInfo> {
     let token_map = TOKEN_MAP.lock().unwrap();
+
     token_map.get(address).cloned()
 }

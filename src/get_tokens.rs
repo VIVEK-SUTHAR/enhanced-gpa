@@ -1,3 +1,4 @@
+use crate::constants::{ACCOUNT_DATA_SIZE, DEFAULT_DECIMALS, MEM_OFFSET};
 use crate::currencies;
 use crate::exchange_rate::ExchangeRates;
 use crate::price_fetcher::PriceFetcher;
@@ -18,8 +19,6 @@ use spl_token::state::Account as SplTokenAccount;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task;
-const DATA_SIZE: u64 = 165;
-const MEM_OFFSET: usize = 32;
 
 #[derive(Serialize, Deserialize)]
 struct TokenImage {
@@ -92,7 +91,7 @@ async fn fetch_token_accounts(
     address: &str,
 ) -> Result<Vec<(Pubkey, solana_sdk::account::Account)>, Box<dyn std::error::Error>> {
     let filters = vec![
-        RpcFilterType::DataSize(DATA_SIZE),
+        RpcFilterType::DataSize(ACCOUNT_DATA_SIZE),
         RpcFilterType::Memcmp(Memcmp::new(
             MEM_OFFSET,
             MemcmpEncodedBytes::Base58(address.to_string()),
@@ -151,12 +150,11 @@ async fn process_single_account(
     if mint_token_account.amount == 0 {
         return None;
     }
-
     let mint_address = mint_token_account.mint.to_string();
 
     let token_data = tokens_map::get_token_info(&mint_address)?;
 
-    let decimals = token_data.decimals.unwrap_or(0);
+    let decimals = token_data.decimals.unwrap_or(DEFAULT_DECIMALS);
 
     let real_amount = mint_token_account.amount as f64 / 10f64.powi(decimals as i32);
 

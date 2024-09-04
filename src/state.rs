@@ -25,7 +25,7 @@ impl AppState {
         let result = exchange_rates.setup_exchange_prices().await;
         match result {
             Ok(_) => {
-                println!("Exchange Rates Loaded !");
+                tracing::info!("Exchange Rates Loaded !");
             }
             Err(e) => {
                 panic!("{}", format!("Token loading failed :{}", e));

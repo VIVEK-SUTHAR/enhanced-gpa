@@ -13,6 +13,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     tracing_subscriber::fmt().init();
     //TODO: Move to Redis
+    tracing::info!("Tokens Loadeding...");
     let token_load = tokens_map::load_token_list();
     match token_load {
         Ok(_) => {
@@ -23,6 +24,6 @@ async fn main() -> std::io::Result<()> {
         }
     }
     let app_state = state::AppState::new().await;
-    server::start_server(app_state, "127.0.0.1:8080").await?;
+    server::start_server(app_state, "127.0.0.1:8081").await?;
     Ok(())
 }

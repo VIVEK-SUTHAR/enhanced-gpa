@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Mutex;
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TokenInfo {
     pub address: String,
@@ -14,12 +15,10 @@ pub struct TokenInfo {
     pub symbol: Option<String>,
 }
 
-pub static TOKEN_MAP: Lazy<Mutex<HashMap<String, TokenInfo>>> = Lazy::new(|| {
-    let token_map = load_token_list().unwrap_or_default();
-    Mutex::new(token_map)
-});
+pub static TOKEN_MAP: Lazy<Mutex<HashMap<String, TokenInfo>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub fn load_token_list() -> Result<HashMap<String, TokenInfo>, Box<dyn std::error::Error>> {
+pub fn load_token_list() -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open("tokens-list.json")?;
     let reader = BufReader::new(file);
 
@@ -29,13 +28,15 @@ pub fn load_token_list() -> Result<HashMap<String, TokenInfo>, Box<dyn std::erro
         .into_iter()
         .filter(|token| token.name.is_some() && token.symbol.is_some())
         .map(|token| (token.address.clone(), token))
-        .collect();
+        .collect::<HashMap<_, _>>();
 
-    Ok(token_map)
+    let mut map = TOKEN_MAP.lock().unwrap();
+    *map = token_map;
+
+    Ok(())
 }
 
 pub fn get_token_info(address: &str) -> Option<TokenInfo> {
     let token_map = TOKEN_MAP.lock().unwrap();
-
     token_map.get(address).cloned()
 }

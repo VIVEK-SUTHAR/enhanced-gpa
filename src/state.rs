@@ -31,6 +31,7 @@ impl AppState {
                 panic!("{}", format!("Token loading failed :{}", e));
             }
         }
+
         Self {
             price_fetcher: Arc::new(fetcher),
             rpc_client: connection,

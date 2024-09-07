@@ -59,11 +59,8 @@ pub async fn get_tokens(
     } else {
         currencies::Currency::USD
     };
-    let should_sort_by_value = if let Some(..) = &query.sortbyvalue {
-        true
-    } else {
-        false
-    };
+
+    let should_sort_by_value = query.sortbyvalue.unwrap_or(false);
 
     match fetch_and_process_tokens(&state, &address, currency, should_sort_by_value).await {
         Ok(tokens) => HttpResponse::Ok().json(tokens),

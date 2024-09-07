@@ -1,9 +1,7 @@
-use crate::constants::{ACCOUNT_DATA_SIZE, DEFAULT_DECIMALS, MEM_OFFSET};
+use crate::constants::{ACCOUNT_DATA_SIZE, MEM_OFFSET};
 use crate::currencies;
-use crate::exchange_rate::ExchangeRates;
-use crate::price_fetcher::PriceFetcher;
+use crate::process::token_account::process_accounts;
 use crate::state;
-use crate::tokens_map;
 use actix_web::{web, HttpResponse};
 use currencies::Currency;
 use serde::{Deserialize, Serialize};
@@ -13,30 +11,30 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
 };
-use solana_sdk::account::Account;
-use solana_sdk::{commitment_config::CommitmentConfig, program_pack::Pack, pubkey::Pubkey};
-use spl_token::state::Account as SplTokenAccount;
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::task;
 
 #[derive(Serialize, Deserialize)]
-struct TokenImage {
-    uri: Option<String>,
+pub struct TokenImage {
+    pub uri: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
-struct TokenInfo {
-    mint_address: String,
-    name: String,
-    balance: f64,
-    value: f64,
-    price: f64,
-    media: TokenImage,
+pub struct TokenInfo {
+    pub mint_address: String,
+    pub name: String,
+    pub balance: f64,
+    pub value: f64,
+    pub price: f64,
+    pub symbol: Option<String>,
+    pub media: TokenImage,
 }
+
 #[derive(Deserialize)]
 struct TokenQuery {
     currency: Option<String>,
+    sortbyvalue: Option<bool>,
 }
 #[actix_web::get("/getTokens/{address}")]
 pub async fn get_tokens(
@@ -61,7 +59,13 @@ pub async fn get_tokens(
     } else {
         currencies::Currency::USD
     };
-    match fetch_and_process_tokens(&state, &address, currency).await {
+    let should_sort_by_value = if let Some(..) = &query.sortbyvalue {
+        true
+    } else {
+        false
+    };
+
+    match fetch_and_process_tokens(&state, &address, currency, should_sort_by_value).await {
         Ok(tokens) => HttpResponse::Ok().json(tokens),
         Err(e) => {
             eprintln!("Error processing tokens: {}", e);
@@ -74,16 +78,34 @@ async fn fetch_and_process_tokens(
     state: &web::Data<state::AppState>,
     address: &str,
     currency: Currency,
+    sort_by_value: bool,
 ) -> Result<Vec<TokenInfo>, Box<dyn std::error::Error>> {
-    let accounts = fetch_token_accounts(&state.rpc_client, address).await?;
+    let (accounts, native_balance) = tokio::join!(
+        fetch_token_accounts(&state.rpc_client, address),
+        fetch_native_balance(&state.rpc_client, address)
+    );
+    let accounts = accounts?;
+    let native_balance = native_balance?;
     let token_infos = process_accounts(
         accounts,
-        &state.price_fetcher,
-        &state.exchange_rates,
+        native_balance,
+        state.price_fetcher.clone(),
+        state.exchange_rates.clone(),
         currency,
+        sort_by_value,
     )
     .await;
     Ok(token_infos)
+}
+
+async fn fetch_native_balance(
+    connection: &Arc<RpcClient>,
+    address: &str,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    let balance = connection
+        .get_balance(&Pubkey::from_str(address).unwrap())
+        .await?;
+    Ok(balance)
 }
 
 async fn fetch_token_accounts(
@@ -112,73 +134,4 @@ async fn fetch_token_accounts(
         .get_program_accounts_with_config(&spl_token::id(), config)
         .await
         .map_err(|e| e.into())
-}
-
-async fn process_accounts(
-    accounts: Vec<(Pubkey, Account)>,
-    fetcher: &PriceFetcher,
-    exchange_rates: &ExchangeRates,
-    currency: Currency,
-) -> Vec<TokenInfo> {
-    let tasks: Vec<_> = accounts
-        .into_iter()
-        .map(|(_, account)| {
-            let fetcher = fetcher.clone();
-            let exchange_rates = exchange_rates.clone();
-            task::spawn(async move {
-                process_single_account(account, &fetcher, &exchange_rates, currency).await
-            })
-        })
-        .collect();
-
-    let results = futures::future::join_all(tasks).await;
-
-    results
-        .into_iter()
-        .filter_map(|result| result.ok().and_then(|r| r))
-        .collect()
-}
-
-async fn process_single_account(
-    account: solana_sdk::account::Account,
-    fetcher: &PriceFetcher,
-    exchange_rates: &ExchangeRates,
-    currency: Currency,
-) -> Option<TokenInfo> {
-    let mint_token_account = SplTokenAccount::unpack_from_slice(&account.data).ok()?;
-
-    if mint_token_account.amount == 0 {
-        return None;
-    }
-    let mint_address = mint_token_account.mint.to_string();
-
-    let token_data = tokens_map::get_token_info(&mint_address)?;
-
-    let decimals = token_data.decimals.unwrap_or(DEFAULT_DECIMALS);
-
-    let real_amount = mint_token_account.amount as f64 / 10f64.powi(decimals as i32);
-
-    let usd_price = match fetcher.fetch_price(&mint_address).await {
-        Ok(price) => price,
-        Err(_) => {
-            eprintln!("failed to fetch price for token: {}", mint_address);
-            return None;
-        }
-    };
-
-    let converted_total_value =
-        ExchangeRates::convert(exchange_rates, usd_price * real_amount, currency)?;
-
-    let converted_token_price = ExchangeRates::convert(exchange_rates, usd_price, currency)?;
-
-    Some(TokenInfo {
-        mint_address,
-        name: token_data.name.unwrap_or_default(),
-        balance: real_amount,
-        price: converted_token_price,
-        value: converted_total_value,
-        media: TokenImage {
-            uri: token_data.logo_uri,
-        },
-    })
 }

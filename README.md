@@ -30,6 +30,7 @@ Fetches all token holdings  for a given Solana account address. Returns detailed
 **Query Parameters:**
 
 - **`currency`** (optional): The target currency for price conversion. Defaults to USD if not specified.
+- **`sortbyvalue`** (optional): sorts the token list by the value
 
 ## TODO
 

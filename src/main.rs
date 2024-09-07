@@ -3,6 +3,7 @@ mod currencies;
 mod exchange_rate;
 mod get_tokens;
 mod price_fetcher;
+mod process;
 mod server;
 mod state;
 mod tokens_map;

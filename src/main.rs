@@ -15,7 +15,7 @@ async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt().init();
     //TODO: Move to Redis
     tracing::info!("Tokens Loadeding...");
-    let token_load = tokens_map::load_token_list();
+    let token_load = tokens_map::load_token_list().await;
     match token_load {
         Ok(_) => {
             tracing::info!("Tokens Loaded");

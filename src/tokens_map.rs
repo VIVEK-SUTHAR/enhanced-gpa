@@ -2,7 +2,8 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
+use std::path::Path;
 use std::sync::Mutex;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -18,10 +19,28 @@ pub struct TokenInfo {
 pub static TOKEN_MAP: Lazy<Mutex<HashMap<String, TokenInfo>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub fn load_token_list() -> Result<(), Box<dyn std::error::Error>> {
+async fn fetch_and_save_token_list() -> Result<(), Box<dyn std::error::Error>> {
+    let url = "https://ipfs.filebase.io/ipfs/QmVsqPqSDm6wqYHhiXEJB1hBxpv6Qz1KkW5sUMDKgAq2X6";
+    let response = reqwest::get(url).await?;
+    if response.status().is_success() {
+        let body = response.text().await?;
+        let mut file = File::create("tokens-list.json")?;
+        file.write_all(body.as_bytes())?;
+        tracing::info!("Successfully fetched and saved the token list.");
+    } else {
+        return Err(format!("Failed to fetch data: HTTP {}", response.status()).into());
+    }
+
+    Ok(())
+}
+
+pub async fn load_token_list() -> Result<(), Box<dyn std::error::Error>> {
+    if !Path::new("tokens-list.json").exists() {
+        fetch_and_save_token_list().await?;
+    }
+
     let file = File::open("tokens-list.json")?;
     let reader = BufReader::new(file);
-
     let token_list: Vec<TokenInfo> = serde_json::from_reader(reader)?;
 
     let token_map = token_list

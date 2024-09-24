@@ -25,6 +25,6 @@ async fn main() -> std::io::Result<()> {
         }
     }
     let app_state = state::AppState::new().await;
-    server::start_server(app_state, "127.0.0.1:8081").await?;
+    server::start_server(app_state, "0.0.0.0:8081").await?;
     Ok(())
 }

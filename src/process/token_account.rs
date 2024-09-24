@@ -37,7 +37,6 @@ pub async fn process_accounts(
     });
 
     let mut results = futures::future::join_all(tasks).await;
-
     if let Ok(native_balance_result) = native_balance_task.await {
         results.push(Ok(native_balance_result));
     }
